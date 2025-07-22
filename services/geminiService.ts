@@ -1,81 +1,60 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { PriceDataPoint, Signal } from '../types';
+import { PriceDataPoint, AnalysisResult } from '../types';
 
-const analysisSchema = {
-  type: Type.OBJECT,
-  properties: {
-    signal: {
-      type: Type.STRING,
-      enum: [Signal.BUY, Signal.SELL, Signal.HOLD],
-      description: 'The recommended trading action: BUY, SELL, or HOLD.',
-    },
-    confidence_score: {
-      type: Type.NUMBER,
-      description: 'A score from 0.0 to 1.0 indicating the confidence in the signal. This score must be dynamic, reflecting the clarity and strength of the observed patterns. A strong, clear trend should yield a higher score (e.g., >0.8), while a sideways or highly volatile market should result in a lower score (e.g., <0.6).',
-    },
-    reasoning: {
-      type: Type.STRING,
-      description: 'A detailed explanation for the trading signal based on the provided price data analysis, in Korean.',
-    },
-    short_term_prediction: {
-        type: Type.STRING,
-        description: 'A brief summary of the expected short-term price movement, in Korean.'
-    },
-    stop_loss_price: {
-      type: Type.NUMBER,
-      description: 'A suggested price at which to sell to limit losses if the trade moves against the prediction. Only for BUY signal.',
-    },
-    take_profit_price: {
-      type: Type.NUMBER,
-      description: 'A suggested price at which to sell to lock in profits. Only for BUY signal.',
-    },
-    suggested_trade_percentage: {
-      type: Type.NUMBER,
-      description: 'For BUY signals only. A suggested percentage of available cash to invest (from 0.05 to 0.5 for 5% to 50%). Base this on confidence and market volatility. A higher confidence score and lower volatility should lead to a higher percentage (e.g., 0.3 or 30%). A lower confidence score or high volatility should result in a lower percentage (e.g., 0.1 or 10%).',
-    },
-  },
-  required: ['signal', 'confidence_score', 'reasoning', 'short_term_prediction'],
-};
+// This function now communicates with the main process via the preload script
+export const fetchTradingAnalysisStream = (priceData: PriceDataPoint[], coinName: string): Promise<AnalysisResult> => {
+    return new Promise((resolve, reject) => {
+        let accumulatedJson = '';
 
+        const handleChunk = (chunk: any) => {
+             if (chunk && chunk.text) {
+                accumulatedJson += chunk.text;
+            }
+        };
 
-export const fetchTradingAnalysisStream = async (priceData: PriceDataPoint[], coinName: string): Promise<AsyncGenerator<GenerateContentResponse>> => {
-    const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+        const handleError = (error: string) => {
+            console.error("Stream Error:", error);
+            // Unsubscribe from all events
+            removeChunkListener();
+            removeErrorListener();
+            removeEndListener();
+             if (error.includes("API_KEY")) {
+                 reject(new Error("API 키가 설정되지 않았습니다. .env 파일을 확인해주세요."));
+            } else {
+                reject(new Error(`AI 분석 중 오류 발생: ${error}`));
+            }
+        };
 
-    const prompt = `
-        You are an expert crypto trading analyst. Your response must be in Korean.
-        Analyze the following 30-day price data for ${coinName}.
-        The data is in JSON format with date and price.
-        Provide a trading signal (BUY, SELL, or HOLD).
-        Explain your reasoning clearly and concisely in Korean.
-        Provide a dynamic confidence score from 0.0 to 1.0 based on trend strength and volatility.
+        const handleEnd = () => {
+            // Unsubscribe from all events
+            removeChunkListener();
+            removeErrorListener();
+            removeEndListener();
 
-        **If the signal is BUY, you must also provide:**
-        1. A 'stop_loss_price'.
-        2. A 'take_profit_price'.
-        3. A 'suggested_trade_percentage': This is crucial. Recommend a percentage of available cash to invest, as a decimal between 0.05 (5%) and 0.5 (50%). A higher confidence score and lower volatility should lead to a higher percentage (e.g., 0.3 or 30%). A lower confidence score or high volatility should result in a lower percentage (e.g., 0.1 or 10%).
+            if (!accumulatedJson) {
+                return reject(new Error("AI로부터 빈 응답을 받았습니다."));
+            }
+            try {
+                // Clean up potential markdown fences from the Gemini response
+                const cleanedJson = accumulatedJson.replace(/```json\n?|\n?```/g, '');
+                const finalResult = JSON.parse(cleanedJson) as AnalysisResult;
+                resolve(finalResult);
+            } catch (e) {
+                 console.error("JSON parsing error:", e);
+                 reject(new Error("AI 응답을 처리하는 중 오류가 발생했습니다. 응답 형식이 올바르지 않을 수 있습니다."));
+            }
+        };
 
-        **If the signal is SELL or HOLD, do not include stop_loss_price, take_profit_price, or suggested_trade_percentage.**
+        // Subscribe to IPC events from the main process
+        const removeChunkListener = window.gemini.on('stream-chunk', handleChunk);
+        const removeErrorListener = window.gemini.on('stream-error', handleError);
+        const removeEndListener = window.gemini.on('stream-end', handleEnd);
 
-        Price Data:
-        ${JSON.stringify(priceData)}
-    `;
-
-    try {
-        const response = await ai.models.generateContentStream({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: analysisSchema,
-            },
-        });
-        
-        return response;
-    } catch(e) {
-        console.error("Error fetching AI analysis stream:", e);
-        if (e instanceof Error && e.message.toLowerCase().includes('api key')) {
-             throw new Error("API_KEY is not configured or is invalid. Please check your .env file.");
-        }
-        throw new Error("Failed to get analysis from AI. The API call failed.");
-    }
+        // Invoke the main process to start the stream
+        window.gemini.invoke('fetch-analysis-stream', priceData, coinName)
+            .catch(err => {
+                 // This initial invoke call might fail if the handler isn't set up
+                 // or if there's an immediate error.
+                 handleError(err.message);
+            });
+    });
 };
