@@ -1,0 +1,48 @@
+{
+  "name": "gradio-crypto-analyzer",
+  "version": "1.0.0",
+  "description": "AI-powered crypto signal analysis tool",
+  "author": "AI Assistant",
+  "license": "MIT",
+  "main": "electron.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder --win",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^0.15.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.19",
+    "dotenv": "^16.4.5",
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.2.2",
+    "vite": "^5.3.1"
+  },
+  "build": {
+    "appId": "com.gradio.crypto.analyzer",
+    "productName": "Gradio Crypto Analyzer",
+    "publish": null,
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "preload.js"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
