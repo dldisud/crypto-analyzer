@@ -18,7 +18,7 @@ function createWindow() {
     width: Math.floor(width * 0.6) < 800 ? 800 : Math.floor(width * 0.6),
     height: Math.floor(height * 0.85) < 600 ? 600 : Math.floor(height * 0.85),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.resolve(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
