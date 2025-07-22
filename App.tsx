@@ -24,16 +24,8 @@ const App: React.FC = () => {
             const data = await fetchRealCryptoData(selectedCoin.id);
             setPriceData(data);
             
-            const stream = await fetchTradingAnalysisStream(data, selectedCoin.name);
-            
-            let accumulatedJson = '';
-            for await (const chunk of stream) {
-                accumulatedJson += chunk.text;
-            }
-
-            // Clean up potential markdown fences from the Gemini response
-            const cleanedJson = accumulatedJson.replace(/```json\n?|\n?```/g, '');
-            const finalResult = JSON.parse(cleanedJson) as AnalysisResult;
+            // The service now returns a Promise of the final result
+            const finalResult = await fetchTradingAnalysisStream(data, selectedCoin.name);
             setAnalysis(finalResult);
 
         } catch (err) {
