@@ -1,0 +1,6 @@
+{
+  "name": "Copy of Gradio Crypto Analyzer",
+  "description": "A Gradio-style UI that analyzes cryptocurrency chart data to provide trading signals.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
